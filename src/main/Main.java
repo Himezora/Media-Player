@@ -2,6 +2,9 @@ package main;
 
 import javafx.application.Application;
 import javafx.scene.Scene;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCombination;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.Pane;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -25,6 +28,24 @@ public class Main extends Application {
         Scene scene = new Scene(new Pane());
         SceneManager sceneManager = new SceneManager(scene);
         sceneManager.showMainMenu();
+
+        stage.setFullScreenExitHint("");
+        stage.setFullScreenExitKeyCombination(KeyCombination.NO_MATCH);
+
+        // F11 toggles fullscreen
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.F11) {
+                stage.setFullScreen(!stage.isFullScreen());
+                event.consume();
+            }
+        });
+
+        stage.maximizedProperty().addListener((obs, wasMaximized, isNowMaximized) -> {
+            if (isNowMaximized) {
+                stage.setMaximized(false);
+                stage.setFullScreen(true);
+            }
+        });
 
         stage.setScene(scene);
         stage.show();

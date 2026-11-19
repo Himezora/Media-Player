@@ -19,9 +19,10 @@ public class MainMenuScene {
 
     public MainMenuScene(SceneManager sceneManager) {
         VBox sideBar = new VBox(10);
-        sideBar.setStyle("-fx-background-color: rgba(30, 30, 30, 0.72);" +
-                "-fx-border-color: rgba(255, 255, 255, 0.55);" +
-                "-fx-border-width: 0 1px 0 0;"
+        sideBar.setStyle(
+                "-fx-background-color: rgba(30, 30, 30, 0.72);" +
+                        "-fx-border-color: rgba(255, 255, 255, 0.55);" +
+                        "-fx-border-width: 0 1px 0 0;"
         );
         double sideBarWidth = 250;
         sideBar.setPrefWidth(sideBarWidth);
@@ -39,17 +40,29 @@ public class MainMenuScene {
         Button buttonPlaylist = new Button("Playlist");
         Button buttonSettings = new Button("Settings");
         double buttonWidth = sideBarWidth * 0.8;
+        String baseStyle =
+                "-fx-font-size: 16px;" +
+                        "-fx-font-family: 'Segoe UI';" +
+                        "-fx-text-fill: white;" +
+                        "-fx-background-radius: 6px;" +
+                        "-fx-background-insets: 0;" +
+                        "-fx-border-color: transparent;" +
+                        "-fx-focus-color: transparent;" +
+                        "-fx-faint-focus-color: transparent;" +
+                        "-fx-cursor: hand;";
+        String normalStyle = baseStyle + "-fx-background-color: transparent;";
+        String hoverStyle = baseStyle + "-fx-background-color: rgba(255, 255, 255, 0.12);";
+        String pressedStyle = baseStyle + "-fx-background-color: rgba(255, 255, 255, 0.22);";
         for (Button button : new Button[]{buttonAccount, buttonPlaylist, buttonSettings}) {
             button.setPrefWidth(buttonWidth);
             button.setPrefHeight(40);
-            //buttons.setStyle("-fx-font-size: 16px;-fx-font-family: 'Times New Roman';");
-            button.setStyle(
-                    "-fx-opacity: 0.82;" +
-                    "-fx-font-size: 16px;" +
-                    "-fx-font-family: 'Segoe UI';" +
-                    "-fx-background-radius: 8px;" +
-                    "-fx-cursor: hand;"
-            );
+            // Prevent the first button from being focused/highlighted on start
+            button.setFocusTraversable(false);
+            button.setStyle(normalStyle);
+            button.setOnMouseEntered(e -> button.setStyle(hoverStyle));
+            button.setOnMouseExited(e -> button.setStyle(normalStyle));
+            button.setOnMousePressed(e -> button.setStyle(pressedStyle));
+            button.setOnMouseReleased(e -> button.setStyle(button.isHover() ? hoverStyle : normalStyle));
         }
         //buttons.setAlignment(Pos.TOP_CENTER);
         //StackPane.setAlignment(buttons, Pos.TOP_CENTER);

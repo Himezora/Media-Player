@@ -1,9 +1,12 @@
 package me.funkel.playlists;
 
+import java.time.LocalDateTime;
+
 public class Playlist {
 
     private String name;
-    private int id;
+    private final int id;
+    private final LocalDateTime createdAt = LocalDateTime.now();
 
     public Playlist(String name, int id) {
         this.name = name;
@@ -14,7 +17,15 @@ public class Playlist {
         return name;
     }
 
+    public void setName(String name) {
+        this.name = name;
+    }
+
     public int getId() {
         return id;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 }

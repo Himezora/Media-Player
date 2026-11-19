@@ -1,6 +1,7 @@
 package me.funkel.scenes;
 
 import javafx.scene.Scene;
+import me.funkel.playlists.Playlist;
 
 public class SceneManager {
 
@@ -25,6 +26,10 @@ public class SceneManager {
 
     public void showPlaylist() {
         scene.setRoot(playlistScene.getOuter());
+    }
+
+    public void showPlaylistDetail(Playlist playlist) {
+        scene.setRoot(new PlaylistDetailScene(this, playlist).getOuter());
     }
 
     public void showSettings() {
