@@ -25,6 +25,8 @@ public class SceneManager {
     }
 
     public void showPlaylist() {
+        // Changes made in the detail scene (rename, cover, songs) must show up in the list
+        playlistScene.refresh();
         scene.setRoot(playlistScene.getOuter());
     }
 

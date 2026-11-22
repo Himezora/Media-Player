@@ -1,5 +1,6 @@
 package me.funkel;
 
+import me.funkel.media.AudioPlayer;
 import me.funkel.playlists.PlaylistManager;
 
 public class Client {
@@ -9,6 +10,7 @@ public class Client {
     private String clientName, companyName;
 
     private final PlaylistManager playlistManager = new PlaylistManager();
+    private final AudioPlayer audioPlayer = new AudioPlayer();
 
     public void init() {
         this.clientName = "Nocturne Media Player";
@@ -29,5 +31,9 @@ public class Client {
 
     public PlaylistManager getPlaylistManager() {
         return playlistManager;
+    }
+
+    public AudioPlayer getAudioPlayer() {
+        return audioPlayer;
     }
 }

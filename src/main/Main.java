@@ -40,13 +40,6 @@ public class Main extends Application {
             }
         });
 
-        stage.maximizedProperty().addListener((obs, wasMaximized, isNowMaximized) -> {
-            if (isNowMaximized) {
-                stage.setMaximized(false);
-                stage.setFullScreen(true);
-            }
-        });
-
         stage.setScene(scene);
         stage.show();
     }

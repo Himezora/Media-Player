@@ -10,6 +10,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import me.funkel.Client;
+import me.funkel.ui.NowPlayingBar;
 
 public class MainMenuScene {
 
@@ -94,7 +95,13 @@ public class MainMenuScene {
                 backgroundSize);
         outer.setBackground(new Background(backgroundImage));
 
-        outer.getChildren().addAll(sideBar);
+        // Now playing bar from the right edge of the side bar to the right of the screen
+        NowPlayingBar nowPlayingBar = new NowPlayingBar();
+        AnchorPane.setLeftAnchor(nowPlayingBar, sideBarWidth);
+        AnchorPane.setRightAnchor(nowPlayingBar, 0.0);
+        AnchorPane.setBottomAnchor(nowPlayingBar, 0.0);
+
+        outer.getChildren().addAll(sideBar, nowPlayingBar);
     }
 
     public AnchorPane getOuter() {

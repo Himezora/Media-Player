@@ -2,92 +2,217 @@ package me.funkel.scenes;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.geometry.Side;
-import javafx.scene.control.*;
-import javafx.scene.input.KeyCode;
-import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
-import javafx.scene.text.Font;
-import javafx.scene.text.FontWeight;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 import me.funkel.Client;
+import me.funkel.media.AudioTrack;
 import me.funkel.playlists.Playlist;
+import me.funkel.ui.AddTracksDialog;
+import me.funkel.ui.CoverView;
+import me.funkel.ui.FileDialogs;
+import me.funkel.ui.Formats;
+import me.funkel.ui.Icon;
+import me.funkel.ui.NowPlayingBar;
+import me.funkel.ui.Theme;
+import me.funkel.ui.UI;
 
-import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class PlaylistScene {
 
-    private static final String PANEL_STYLE = "-fx-background-color: rgba(30, 30, 30, 0.85);";
-    private static final String DIVIDER_STYLE = "-fx-border-color: rgba(255, 255, 255, 0.2);";
-    private static final String ROW_STYLE = "-fx-background-color: rgba(255, 255, 255, 0.05); -fx-background-radius: 6px; -fx-cursor: hand;";
-    private static final String ROW_SELECTED_STYLE = "-fx-background-color: rgba(255, 255, 255, 0.22); -fx-background-radius: 6px; -fx-cursor: hand;";
-    private static final String INPUT_STYLE = "-fx-background-color: rgba(255, 255, 255, 0.08);" +
-            "-fx-text-fill: white;" +
-            "-fx-prompt-text-fill: rgba(255, 255, 255, 0.45);" +
-            "-fx-background-radius: 6px;" +
-            "-fx-font-size: 14px;" +
-            "-fx-padding: 8px;";
-    private static final String MENU_STYLE = "-fx-background-color: rgb(40, 40, 40);" +
-            "-fx-background-radius: 6px;" +
-            "-fx-text-base-color: white;" +
-            "-fx-focused-text-base-color: white;" +
-            "-fx-selection-bar: rgba(255, 255, 255, 0.14);";
-    private static final Color MARKER_COLOR = Color.rgb(255, 255, 255, 0.6);
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+    private static final double PLAYLIST_COVER_SIZE = 52;
+    private static final double TRACK_COVER_SIZE = 38;
+    private static final double TRACK_INDENT = 28;
 
     private final SceneManager sceneManager;
     private final HBox outer = new HBox();
     private final VBox playlistEntries = new VBox(8);
-    private final VBox infoContent = new VBox(10);
     private final TextField nameField = new TextField();
-    private final VBox right;
+    /** Playlists whose songs are currently shown (all are collapsed at first). */
+    private final Set<Playlist> expanded = new HashSet<>();
 
     private Playlist selected;
 
     public PlaylistScene(SceneManager sceneManager) {
         this.sceneManager = sceneManager;
-        outer.setStyle("-fx-background-color: #669cd1;");
+        outer.setStyle(Theme.BACKGROUND_STYLE);
 
-        VBox left = createLeftColumn();
         VBox middle = createMiddleColumn();
-        right = createRightColumn();
-        HBox.setHgrow(middle, Priority.ALWAYS);
+        VBox.setVgrow(middle, Priority.ALWAYS);
+        // Everything right of the left column, with the now playing bar at the bottom
+        VBox content = new VBox(middle, new NowPlayingBar());
+        HBox.setHgrow(content, Priority.ALWAYS);
 
-        outer.getChildren().addAll(left, middle, right);
-        refreshList();
-        refreshInfo();
+        outer.getChildren().addAll(createLeftColumn(), content);
+        refresh();
+    }
+
+    /** Rebuilds the playlist list, e.g. after changes made in another scene. */
+    public void refresh() {
+        playlistEntries.getChildren().clear();
+        for (Playlist playlist : playlists()) {
+            playlistEntries.getChildren().add(createPlaylistBlock(playlist));
+        }
     }
 
     // ---------- Left column: actions ----------
 
     private VBox createLeftColumn() {
         VBox left = new VBox(10);
-        left.setPrefWidth(250);
+        left.setPrefWidth(Theme.SIDEBAR_WIDTH);
         left.setMinWidth(220);
         left.setPadding(new Insets(20));
-        left.setStyle(PANEL_STYLE + DIVIDER_STYLE + "-fx-border-width: 0 1px 0 0;");
-
-        Label header = createHeader("Playlists");
+        left.setStyle(Theme.PANEL_STYLE + Theme.DIVIDER_STYLE + "-fx-border-width: 0 1px 0 0;");
 
         nameField.setPromptText("Playlist name");
-        nameField.setStyle(INPUT_STYLE);
+        nameField.setStyle(Theme.INPUT_STYLE);
         nameField.setOnAction(e -> createPlaylist());
 
-        Button createButton = createFlatButton("Create Playlist");
+        Button createButton = UI.flatButton("Create Playlist", Icon.ADD);
         createButton.setOnAction(e -> createPlaylist());
 
-        Region spacer = new Region();
-        VBox.setVgrow(spacer, Priority.ALWAYS);
-
-        Button backButton = createFlatButton("Go back");
+        Button backButton = UI.flatButton("Go back", Icon.BACK);
         backButton.setOnAction(e -> sceneManager.showMainMenu());
 
-        left.getChildren().addAll(header, nameField, createButton, spacer, backButton);
+        left.getChildren().addAll(UI.header("Playlists"), nameField, createButton, UI.vSpacer(), backButton);
         return left;
     }
 
+    // ---------- Middle column: playlist list ----------
+
+    private VBox createMiddleColumn() {
+        VBox middle = new VBox(10);
+        middle.setPadding(new Insets(20));
+
+        playlistEntries.setPadding(new Insets(0, 4, 0, 0));
+        // Clicking empty space in the list unselects the current playlist
+        playlistEntries.setOnMouseClicked(e -> select(null));
+
+        ScrollPane scrollPane = new ScrollPane(playlistEntries);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setStyle(Theme.TRANSPARENT_SCROLL_STYLE);
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
+
+        middle.getChildren().addAll(UI.header("Your Playlists"), scrollPane);
+        return middle;
+    }
+
+    /** A playlist row as header, followed by its songs when expanded. */
+    private VBox createPlaylistBlock(Playlist playlist) {
+        VBox block = new VBox(4);
+        block.getChildren().add(createPlaylistRow(playlist));
+        if (expanded.contains(playlist)) {
+            block.getChildren().add(createTrackList(playlist));
+        }
+        return block;
+    }
+
+    private HBox createPlaylistRow(Playlist playlist) {
+        CoverView cover = new CoverView(PLAYLIST_COVER_SIZE);
+        cover.setImage(playlist.getCover());
+        cover.setOnPlay(() -> play(playlist, 0));
+
+        Label name = UI.label(playlist.getName(), 18, Theme.TEXT);
+        // Underline on hover to show the name itself is clickable
+        name.setOnMouseEntered(e -> name.setUnderline(true));
+        name.setOnMouseExited(e -> name.setUnderline(false));
+        // Clicking the name opens the playlist
+        name.setOnMouseClicked(e -> {
+            e.consume();
+            selected = playlist;
+            sceneManager.showPlaylistDetail(playlist);
+        });
+
+        Label count = UI.label(Formats.songCount(playlist.getTracks().size()), 13, Theme.TEXT_FAINT);
+        VBox texts = new VBox(2, name, count);
+        texts.setAlignment(Pos.CENTER_LEFT);
+        texts.setMinWidth(0);
+
+        Button expandButton = UI.iconButton(expanded.contains(playlist) ? Icon.TRIANGLE_DOWN : Icon.TRIANGLE_UP,
+                7, Theme.MARKER_COLOR);
+        expandButton.setOnAction(e -> toggleExpanded(playlist));
+
+        HBox row = new HBox(14, cover, texts, UI.hSpacer(), expandButton, createOptionsMarker(texts, name, playlist));
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(8, 8, 8, 8));
+        row.setMinHeight(PLAYLIST_COVER_SIZE + 16);
+        row.setStyle(playlist == selected ? Theme.ROW_SELECTED_STYLE : Theme.ROW_STYLE);
+
+        // Clicking anywhere else on the row selects it, clicking it again unselects it
+        row.setOnMouseClicked(e -> {
+            e.consume();
+            select(playlist == selected ? null : playlist);
+        });
+        return row;
+    }
+
+    private Label createOptionsMarker(VBox texts, Label name, Playlist playlist) {
+        return UI.optionsMarker(
+                UI.menuItem("Add songs", () -> addSongs(playlist)),
+                UI.menuItem("Change cover", () -> changeCover(playlist)),
+                UI.menuItem("Rename", () -> UI.startInlineEdit(texts, name, playlist.getName(), playlist::setName, this::refresh)),
+                UI.menuItem("Delete", () -> deletePlaylist(playlist))
+        );
+    }
+
+    // ---------- Song rows ----------
+
+    private VBox createTrackList(Playlist playlist) {
+        VBox list = new VBox(4);
+        list.setPadding(new Insets(0, 0, 4, TRACK_INDENT));
+
+        List<AudioTrack> tracks = playlist.getTracks();
+        if (tracks.isEmpty()) {
+            Label empty = UI.label("No songs yet. Add some with ⋮ → Add songs.", 14, Theme.TEXT_FAINT);
+            empty.setPadding(new Insets(10, 12, 10, 12));
+            empty.setMaxWidth(Double.MAX_VALUE);
+            empty.setStyle(Theme.TRACK_ROW_STYLE);
+            list.getChildren().add(empty);
+        }
+        for (int i = 0; i < tracks.size(); i++) {
+            list.getChildren().add(createTrackRow(playlist, i));
+        }
+        return list;
+    }
+
+    private HBox createTrackRow(Playlist playlist, int index) {
+        AudioTrack track = playlist.getTracks().get(index);
+
+        CoverView cover = new CoverView(TRACK_COVER_SIZE).withPlaceholderIcon(Icon.MUSIC_NOTE);
+        cover.setImage(track.getCover());
+        cover.setOnPlay(() -> play(playlist, index));
+
+        VBox texts = new VBox(1,
+                UI.label(track.getTitle(), 15, Theme.TEXT),
+                UI.label(track.getArtist(), 13, Theme.TEXT_FAINT));
+        texts.setMinWidth(0);
+
+        HBox row = new HBox(12, cover, texts);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(6, 12, 6, 8));
+        row.setStyle(Theme.TRACK_ROW_STYLE);
+        // Double click plays the song
+        row.setOnMouseClicked(e -> {
+            e.consume();
+            if (e.getClickCount() == 2) play(playlist, index);
+        });
+        return row;
+    }
+
+    // ---------- Actions ----------
+
     private void createPlaylist() {
-        List<Playlist> playlists = Client.getClient().getPlaylistManager().getPlayaDenBossa();
+        List<Playlist> playlists = playlists();
         // Highest id + 1, so ids stay unique even after deleting playlists
         int id = playlists.stream().mapToInt(Playlist::getId).max().orElse(0) + 1;
         String name = nameField.getText().trim();
@@ -102,206 +227,48 @@ public class PlaylistScene {
 
     private void select(Playlist playlist) {
         selected = playlist;
-        refreshList();
-        refreshInfo();
+        refresh();
+    }
+
+    private void toggleExpanded(Playlist playlist) {
+        if (!expanded.remove(playlist)) {
+            expanded.add(playlist);
+        }
+        refresh();
     }
 
     private void deletePlaylist(Playlist playlist) {
-        Client.getClient().getPlaylistManager().getPlayaDenBossa().remove(playlist);
+        playlists().remove(playlist);
+        expanded.remove(playlist);
         select(selected == playlist ? null : selected);
     }
 
-    private void toggleInfo() {
-        right.setVisible(!right.isVisible());
-        right.setManaged(right.isVisible());
+    private void addSongs(Playlist playlist) {
+        // Show the new songs right away
+        expanded.add(playlist);
+        AddTracksDialog.show(window(), playlist, this::refresh);
     }
 
-    // ---------- Middle column: playlist list ----------
-
-    private VBox createMiddleColumn() {
-        VBox middle = new VBox(10);
-        middle.setPadding(new Insets(20));
-
-        Label header = createHeader("Your Playlists");
-
-        playlistEntries.setPadding(new Insets(0, 4, 0, 0));
-        // Clicking empty space in the list unselects the current playlist
-        playlistEntries.setOnMouseClicked(e -> select(null));
-
-        ScrollPane scrollPane = new ScrollPane(playlistEntries);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setFitToHeight(true);
-        scrollPane.setStyle("-fx-background-color: transparent; -fx-background: transparent;");
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
-
-        middle.getChildren().addAll(header, scrollPane);
-        return middle;
-    }
-
-    private void refreshList() {
-        playlistEntries.getChildren().clear();
-        for (Playlist playlist : Client.getClient().getPlaylistManager().getPlayaDenBossa()) {
-            playlistEntries.getChildren().add(createPlaylistRow(playlist));
+    private void changeCover(Playlist playlist) {
+        Image image = FileDialogs.chooseImage(window());
+        if (image != null) {
+            playlist.setCover(image);
+            refresh();
         }
     }
 
-    private HBox createPlaylistRow(Playlist playlist) {
-        HBox row = new HBox();
-        row.setAlignment(Pos.CENTER_LEFT);
-        row.setPadding(new Insets(0, 8, 0, 14));
-        row.setPrefHeight(50);
-        row.setMinHeight(50);
-        row.setStyle(playlist == selected ? ROW_SELECTED_STYLE : ROW_STYLE);
-
-        Label name = new Label(playlist.getName());
-        name.setTextFill(Color.WHITE);
-        name.setFont(Font.font("Segoe UI", 16));
-        // Underline on hover to show the name itself is clickable
-        name.setOnMouseEntered(e -> name.setUnderline(true));
-        name.setOnMouseExited(e -> name.setUnderline(false));
-
-        // Clicking the name opens the playlist
-        name.setOnMouseClicked(e -> {
-            e.consume();
-            selected = playlist;
-            sceneManager.showPlaylistDetail(playlist);
-        });
-
-        // Clicking anywhere else on the row selects it, clicking it again unselects it
-        row.setOnMouseClicked(e -> {
-            e.consume();
-            select(playlist == selected ? null : playlist);
-        });
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        row.getChildren().addAll(name, spacer, createOptionsMarker(row, name, playlist));
-        return row;
-    }
-
-    // The "⋮" marker at the right edge of a row that opens the options menu
-    private Label createOptionsMarker(HBox row, Label name, Playlist playlist) {
-        Label marker = new Label("⋮");
-        marker.setTextFill(MARKER_COLOR);
-        marker.setFont(Font.font("Segoe UI", FontWeight.BOLD, 20));
-        marker.setPadding(new Insets(0, 8, 0, 8));
-        marker.setOnMouseEntered(e -> marker.setTextFill(Color.WHITE));
-        marker.setOnMouseExited(e -> marker.setTextFill(MARKER_COLOR));
-
-        MenuItem rename = new MenuItem("Rename");
-        rename.setOnAction(e -> startRename(row, name, playlist));
-        MenuItem delete = new MenuItem("Delete");
-        delete.setOnAction(e -> deletePlaylist(playlist));
-        MenuItem info = new MenuItem("Infos");
-        info.setOnAction(e -> toggleInfo());
-
-        ContextMenu menu = new ContextMenu(rename, delete, info);
-        menu.setStyle(MENU_STYLE);
-
-        marker.setOnMouseClicked(e -> {
-            e.consume();
-            //info.setText(right.isVisible() ? "Hide Info" : "Show Info");
-            menu.show(marker, Side.BOTTOM, 0, 0);
-        });
-        return marker;
-    }
-
-    // Swaps the name label for a text field: Enter saves, Escape or clicking away cancels
-    private void startRename(HBox row, Label name, Playlist playlist) {
-        TextField field = new TextField(playlist.getName());
-        field.setStyle(INPUT_STYLE);
-        field.setOnMouseClicked(e -> e.consume());
-        field.setOnAction(e -> {
-            String newName = field.getText().trim();
-            if (!newName.isEmpty()) {
-                playlist.setName(newName);
-            }
-            refreshList();
-            refreshInfo();
-        });
-        field.setOnKeyPressed(e -> {
-            if (e.getCode() == KeyCode.ESCAPE) refreshList();
-        });
-        field.focusedProperty().addListener((obs, wasFocused, focused) -> {
-            if (!focused) refreshList();
-        });
-
-        row.getChildren().set(row.getChildren().indexOf(name), field);
-        field.requestFocus();
-        field.selectAll();
-    }
-
-    // ---------- Right column: info ----------
-
-    private VBox createRightColumn() {
-        VBox right = new VBox(10);
-        right.setPrefWidth(300);
-        right.setMinWidth(240);
-        right.setPadding(new Insets(20));
-        right.setStyle(PANEL_STYLE + DIVIDER_STYLE + "-fx-border-width: 0 0 0 1px;");
-
-        right.getChildren().addAll(createHeader("Info"), infoContent);
-        return right;
-    }
-
-    private void refreshInfo() {
-        infoContent.getChildren().clear();
-        if (selected == null) {
-            infoContent.getChildren().add(createInfoLabel("No playlist selected."));
-            return;
-        }
-        Label name = new Label(selected.getName());
-        name.setTextFill(Color.WHITE);
-        name.setFont(Font.font("Segoe UI", FontWeight.BOLD, 20));
-        name.setWrapText(true);
-
-        infoContent.getChildren().addAll(
-                name,
-                createInfoLabel("ID: " + selected.getId()),
-                createInfoLabel("Created: " + selected.getCreatedAt().format(DATE_FORMAT))
-        );
+    private void play(Playlist playlist, int index) {
+        Client.getClient().getAudioPlayer().play(playlist.getTracks(), index);
     }
 
     // ---------- Helpers ----------
 
-    private Label createHeader(String text) {
-        Label label = new Label(text);
-        label.setTextFill(Color.WHITE);
-        label.setFont(Font.font("Segoe UI", FontWeight.BOLD, 22));
-        VBox.setMargin(label, new Insets(0, 0, 10, 0));
-        return label;
+    private List<Playlist> playlists() {
+        return Client.getClient().getPlaylistManager().getPlayaDenBossa();
     }
 
-    private Label createInfoLabel(String text) {
-        Label label = new Label(text);
-        label.setTextFill(Color.rgb(255, 255, 255, 0.75));
-        label.setFont(Font.font("Segoe UI", 14));
-        label.setWrapText(true);
-        return label;
-    }
-
-    private Button createFlatButton(String text) {
-        String base = "-fx-font-size: 15px;" +
-                "-fx-font-family: 'Segoe UI';" +
-                "-fx-text-fill: white;" +
-                "-fx-background-radius: 6px;" +
-                "-fx-background-insets: 0;" +
-                "-fx-cursor: hand;";
-        String normal = base + "-fx-background-color: rgba(255, 255, 255, 0.06);";
-        String hover = base + "-fx-background-color: rgba(255, 255, 255, 0.14);";
-        String pressed = base + "-fx-background-color: rgba(255, 255, 255, 0.24);";
-
-        Button button = new Button(text);
-        button.setMaxWidth(Double.MAX_VALUE);
-        button.setPrefHeight(40);
-        button.setFocusTraversable(false);
-        button.setStyle(normal);
-        button.setOnMouseEntered(e -> button.setStyle(hover));
-        button.setOnMouseExited(e -> button.setStyle(normal));
-        button.setOnMousePressed(e -> button.setStyle(pressed));
-        button.setOnMouseReleased(e -> button.setStyle(button.isHover() ? hover : normal));
-        return button;
+    private Window window() {
+        return outer.getScene().getWindow();
     }
 
     public HBox getOuter() {
